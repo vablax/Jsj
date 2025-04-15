@@ -1,64 +1,118 @@
--- LocalScript inside a ScreenGui
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
-local player = game.Players.LocalPlayer
+local player = Players.LocalPlayer
 local mouse = player:GetMouse()
-local camera = game.Workspace.CurrentCamera
+local camera = workspace.CurrentCamera
 
-local circle = Instance.new("Frame")
-circle.Name = "AimCircle"
-circle.Size = UDim2.new(0, 100, 0, 100) -- diameter
-circle.Position = UDim2.new(0.5, -50, 0.5, -50) -- centered
-circle.BackgroundTransparency = 1
+-- Aim Assist Settings
+local aimRadius = 100 -- pixels
+local targetPartName = "Head"
 
-local uiCorner = Instance.new("UICorner", circle)
-local uiStroke = Instance.new("UIStroke", circle)
-uiStroke.Thickness = 2
-uiStroke.Color = Color3.fromRGB(255, 0, 0)
+-- Function to get closest target
+local function getClosestTarget()
+	local closestTarget = nil
+	local shortestDistance = aimRadius
 
-circle.Parent = script.Parent
-
-local function getClosestEnemy()
-	local closestEnemy = nil
-	local shortestDistance = math.huge
-
-	for _, character in game.Workspace:GetChildren() do
-		if character:IsA("Model") and character:FindFirstChild("Humanoid") then
-			local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-			if humanoidRootPart then
-				local localPlayer = game.Players.LocalPlayer
-				local localCharacter = localPlayer.Character
-				local localHumanoidRootPart = localCharacter:FindFirstChild("HumanoidRootPart")
-
-				if localPlayer and localCharacter and localHumanoidRootPart then
-					if character ~= localCharacter then
-						local screenPoint = camera:WorldToScreenPoint(humanoidRootPart.Position)
-						local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(circle.AbsolutePosition.X + circle.AbsoluteSize.X / 2, circle.AbsolutePosition.Y + circle.AbsoluteSize.Y / 2)).Magnitude
-						local enemyDistance = (humanoidRootPart.Position - localHumanoidRootPart.Position).Magnitude
-						if enemyDistance > 10 then
-							if distance < shortestDistance then
-								shortestDistance = distance
-								closestEnemy = character
-							end
-						end
-					end
+	for _, target in pairs(workspace:GetDescendants()) do
+		if target:IsA("Model") and target:FindFirstChild(targetPartName) then
+			local part = target[targetPartName]
+			local screenPoint, onScreen = camera:WorldToViewportPoint(part.Position)
+			if onScreen then
+				local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
+				if distance < shortestDistance then
+					shortestDistance = distance
+					closestTarget = part
 				end
 			end
 		end
 	end
 
-	return closestEnemy
+	return closestTarget
 end
 
-local function aimAtTarget(target)
+-- Update camera to aim at the target
+RunService.RenderStepped:Connect(function()
+	local target = getClosestTarget()
 	if target then
-		local humanoidRootPart = target:FindFirstChild("HumanoidRootPart")
-		if humanoidRootPart then
-			camera.CFrame = CFrame.new(camera.CFrame.Position, humanoidRootPart.Position)
+		camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position)
+	end
+end),
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local aimbotEnabled = false -- Starts OFF
+
+-- UI Setup
+local gui = Instance.new("ScreenGui")
+gui.Name = "AimbotUI"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Toggle Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "AimbotToggle"
+toggleButton.Size = UDim2.new(0, 150, 0, 40)
+toggleButton.Position = UDim2.new({0.013, 0},{0.439, 0})
+toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.TextScaled = true
+toggleButton.Text = "Aimbot: OFF"
+toggleButton.Parent = gui
+
+-- Make button pretty
+local corner = Instance.new("UICorner", toggleButton)
+corner.CornerRadius = UDim.new(0, 8)
+
+-- Aimbot Settings
+local AIM_RADIUS = 100
+local TARGET_PART = "Head"
+
+-- Toggle logic
+toggleButton.MouseButton1Click:Connect(function()
+	aimbotEnabled = not aimbotEnabled
+	toggleButton.Text = aimbotEnabled and "Aimbot: ON" or "Aimbot: OFF"
+end)
+
+-- Get closest enemy player
+local function getClosestPlayer()
+	local closest = nil
+	local shortestDist = AIM_RADIUS
+
+	for _, targetPlayer in pairs(Players:GetPlayers()) do
+		if targetPlayer ~= LocalPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild(TARGET_PART) then
+			local part = targetPlayer.Character[TARGET_PART]
+			local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+
+			if onScreen then
+				local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+				local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+
+				if distance < shortestDist then
+					shortestDist = distance
+					closest = part
+				end
+			end
 		end
 	end
+
+	return closest
 end
 
-game:GetService("RunService").RenderStepped:Connect(function()
-	local target = getClosestEnemy()
-	aimAtTarget(target)
+-- Main Aimbot Loop
+RunService.RenderStepped:Connect(function()
+	if aimbotEnabled then
+		local target = getClosestPlayer()
+		if target then
+			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+		end
+	end
 end)
+
+
+
+
