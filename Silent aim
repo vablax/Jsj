@@ -1,0 +1,64 @@
+-- LocalScript inside a ScreenGui
+
+local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = game.Workspace.CurrentCamera
+
+local circle = Instance.new("Frame")
+circle.Name = "AimCircle"
+circle.Size = UDim2.new(0, 100, 0, 100) -- diameter
+circle.Position = UDim2.new(0.5, -50, 0.5, -50) -- centered
+circle.BackgroundTransparency = 1
+
+local uiCorner = Instance.new("UICorner", circle)
+local uiStroke = Instance.new("UIStroke", circle)
+uiStroke.Thickness = 2
+uiStroke.Color = Color3.fromRGB(255, 0, 0)
+
+circle.Parent = script.Parent
+
+local function getClosestEnemy()
+	local closestEnemy = nil
+	local shortestDistance = math.huge
+
+	for _, character in game.Workspace:GetChildren() do
+		if character:IsA("Model") and character:FindFirstChild("Humanoid") then
+			local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+			if humanoidRootPart then
+				local localPlayer = game.Players.LocalPlayer
+				local localCharacter = localPlayer.Character
+				local localHumanoidRootPart = localCharacter:FindFirstChild("HumanoidRootPart")
+
+				if localPlayer and localCharacter and localHumanoidRootPart then
+					if character ~= localCharacter then
+						local screenPoint = camera:WorldToScreenPoint(humanoidRootPart.Position)
+						local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(circle.AbsolutePosition.X + circle.AbsoluteSize.X / 2, circle.AbsolutePosition.Y + circle.AbsoluteSize.Y / 2)).Magnitude
+						local enemyDistance = (humanoidRootPart.Position - localHumanoidRootPart.Position).Magnitude
+						if enemyDistance > 10 then
+							if distance < shortestDistance then
+								shortestDistance = distance
+								closestEnemy = character
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return closestEnemy
+end
+
+local function aimAtTarget(target)
+	if target then
+		local humanoidRootPart = target:FindFirstChild("HumanoidRootPart")
+		if humanoidRootPart then
+			camera.CFrame = CFrame.new(camera.CFrame.Position, humanoidRootPart.Position)
+		end
+	end
+end
+
+game:GetService("RunService").RenderStepped:Connect(function()
+	local target = getClosestEnemy()
+	aimAtTarget(target)
+end)
