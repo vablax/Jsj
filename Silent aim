@@ -38,23 +38,5 @@ game:GetService("RunService").RenderStepped:Connect(function()
     end
 end)
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 100, 0, 50)
-toggleButton.Position = UDim2.new(0, 10, 0, 10)
-toggleButton.Text = "Toggle Aimbot"
-toggleButton.Parent = PlayerGui:WaitForChild("ScreenGui")
-
-local aimbotEnabled = Instance.new("BoolValue")
-aimbotEnabled.Value = true
-aimbotEnabled.Name = "AimbotEnabled"
-aimbotEnabled.Parent = LocalPlayer
-
-toggleButton.MouseButton1Click:Connect(function()
-    aimbotEnabled.Value = not aimbotEnabled.Value
-    toggleButton.Text = aimbotEnabled.Value and "Disable Aimbot" or "Enable Aimbot"
-end)
 
