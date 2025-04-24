@@ -1,30 +1,33 @@
--- AdvancedTargetingSystem.lua
--- An advanced targeting system with cursor-following circle, ESP, and mobile support
+-- AladiaPvPTargetingSystem.lua
+-- A targeting system optimized for Aladia PvP
 -- Place this in StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local mouse = player:GetMouse()
 
--- Configuration
+-- Configuration (optimized for Aladia PvP)
 local config = {
     Enabled = true,              -- Is the system enabled by default
     ToggleKey = Enum.KeyCode.F,  -- Key to toggle the system on/off (PC)
-    MaxDistance = 150,           -- Maximum distance to target
-    FieldOfView = 80,            -- Field of view in degrees (how far from center targets can be)
+    MaxDistance = 200,           -- Maximum distance to target (Aladia has large maps)
+    FieldOfView = 90,            -- Field of view in degrees (how far from center targets can be)
     TeamCheck = true,            -- Check if target is on same team
     VisibilityCheck = true,      -- Check if target is visible (not behind walls)
-    TargetPart = "Head",         -- Part to target (Head, HumanoidRootPart, etc.)
-    SmoothingFactor = 0.2,       -- How smoothly to track targets (0-1, lower = smoother)
-    AssistStrength = 0.8,        -- How strong the assist is (0-1, higher = stronger)
+    TargetPart = "Head",         -- Targeting head for better precision in Aladia
+    SmoothingFactor = 0.15,      -- How smoothly to track targets (0-1, lower = smoother)
+    AssistStrength = 0.7,        -- How strong the assist is (0-1, higher = stronger)
+    PredictMovement = true,      -- Predict target movement (useful for PvP)
+    PredictionStrength = 0.6,    -- How strongly to predict movement
     
     -- Circle reticle settings
-    CircleRadius = 25,           -- Size of the targeting circle (increased size)
+    CircleRadius = 30,           -- Size of the targeting circle
     CircleThickness = 2,         -- Thickness of the circle line
     DefaultColor = Color3.fromRGB(255, 255, 255), -- Default white circle
     TargetColor = Color3.fromRGB(255, 0, 0),      -- Red when targeting
@@ -32,15 +35,15 @@ local config = {
     CircleFilled = false,        -- Whether the circle is filled or just an outline
     PulseEffect = true,          -- Whether the circle should pulse when locked on target
     PulseSpeed = 1,              -- Speed of the pulse effect
-    PulseSize = 1.5,             -- Maximum size multiplier for pulse effect
+    PulseSize = 1.3,             -- Maximum size multiplier for pulse effect
     
     -- Mobile button settings
-    MobileButtonSize = UDim2.new(0, 50, 0, 50),    -- Size of the mobile toggle button
-    MobileButtonPosition = UDim2.new(0.9, -25, 0.7, -25), -- Position (right side, medium height)
+    MobileButtonSize = UDim2.new(0, 55, 0, 55),    -- Size of the mobile toggle button
+    MobileButtonPosition = UDim2.new(0.9, -25, 0.65, -25), -- Position (right side)
     MobileButtonColor = Color3.fromRGB(200, 200, 200),  -- Button color when off
     MobileButtonActiveColor = Color3.fromRGB(0, 200, 0), -- Button color when on
     MobileButtonTransparency = 0.3,                 -- Button transparency
-    MobileButtonIcon = "rbxassetid://6031625146",    -- Target icon (change to any Roblox asset ID)
+    MobileButtonIcon = "rbxassetid://6031625146",    -- Target icon
     
     -- ESP Settings
     ESPEnabled = true,           -- Enable ESP by default
@@ -49,11 +52,18 @@ local config = {
     ESPBoxTransparency = 0.5,    -- Box transparency
     ESPBoxThickness = 2,         -- Box outline thickness
     ESPTextColor = Color3.fromRGB(255, 255, 255), -- White text
-    ESPDistance = 500,           -- Maximum distance for ESP to show
+    ESPDistance = 400,           -- Maximum distance for ESP to show
     ESPShowHealth = true,        -- Show health bar
     ESPShowName = true,          -- Show player names
     ESPShowDistance = true,      -- Show distance to player
     ESPUpdateRate = 0.1,         -- How often to update ESP (seconds)
+    
+    -- Aladia-specific settings
+    TargetMages = true,          -- Target players with wands/staffs in hand
+    TargetMeleeUsers = true,     -- Target players with melee weapons in hand
+    PrioritizeAttackers = true,  -- Prioritize players who are attacking you
+    AladiaMageIdentifiers = {"Wand", "Staff", "Tome"}, -- Names that might appear in mage weapons
+    AladiaMeleeIdentifiers = {"Sword", "Blade", "Axe", "Dagger", "Hammer", "Scythe"} -- Names for melee weapons
 }
 
 -- Variables
@@ -64,11 +74,14 @@ local isESPEnabled = config.ESPEnabled
 local isMobile = GuiService:IsTenFootInterface() or UserInputService.TouchEnabled
 local espObjects = {}
 local lastUpdateTime = 0
+local targetVelocity = Vector3.new(0, 0, 0)
+local lastTargetPosition = nil
+local lastUpdateTime = 0
 
 -- Create the targeting UI with cursor-following circle
 local function createTargetingUI()
     local targetGui = Instance.new("ScreenGui")
-    targetGui.Name = "TargetingSystem"
+    targetGui.Name = "AladiaTargetingSystem"
     targetGui.ResetOnSpawn = false
     targetGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
@@ -108,6 +121,27 @@ local function createTargetingUI()
         circleFrame.BackgroundColor3 = config.DefaultColor
         circleFrame.BackgroundTransparency = config.CircleTransparency + 0.5 -- Make fill more transparent than outline
     end
+    
+    -- Create a targeting status indicator
+    local statusIndicator = Instance.new("TextLabel")
+    statusIndicator.Name = "StatusIndicator"
+    statusIndicator.Size = UDim2.new(0, 150, 0, 25)
+    statusIndicator.Position = UDim2.new(0.5, -75, 0.97, -25)
+    statusIndicator.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    statusIndicator.BackgroundTransparency = 0.5
+    statusIndicator.TextColor3 = Color3.fromRGB(255, 255, 255)
+    statusIndicator.TextStrokeTransparency = 0
+    statusIndicator.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    statusIndicator.Text = "TARGETING: READY"
+    statusIndicator.Font = Enum.Font.GothamBold
+    statusIndicator.TextSize = 14
+    statusIndicator.Visible = isTargetingEnabled
+    statusIndicator.Parent = targetGui
+    
+    -- Add corner radius to status indicator
+    local statusCorner = Instance.new("UICorner")
+    statusCorner.CornerRadius = UDim.new(0, 5)
+    statusCorner.Parent = statusIndicator
     
     -- Create mobile toggle buttons if on mobile/touch device
     local toggleButton, espButton
@@ -156,11 +190,12 @@ local function createTargetingUI()
             toggleButton.BackgroundColor3 = isTargetingEnabled and config.MobileButtonActiveColor or config.MobileButtonColor
             statusLabel.Text = isTargetingEnabled and "ON" or "OFF"
             circleFrame.Visible = isTargetingEnabled
+            statusIndicator.Visible = isTargetingEnabled
             
             -- Provide feedback
             local feedbackText = isTargetingEnabled and "Targeting ON" or "Targeting OFF"
             game.StarterGui:SetCore("SendNotification", {
-                Title = "Targeting System",
+                Title = "Aladia Targeting",
                 Text = feedbackText,
                 Duration = 1
             })
@@ -224,7 +259,7 @@ local function createTargetingUI()
             -- Provide feedback
             local feedbackText = isESPEnabled and "ESP ON" or "ESP OFF"
             game.StarterGui:SetCore("SendNotification", {
-                Title = "ESP System",
+                Title = "Aladia ESP",
                 Text = feedbackText,
                 Duration = 1
             })
@@ -240,6 +275,7 @@ local function createTargetingUI()
         TargetGui = targetGui,
         CircleFrame = circleFrame,
         CircleStroke = circleStroke,
+        StatusIndicator = statusIndicator,
         ToggleButton = toggleButton,
         ESPButton = espButton,
         ESPContainer = espContainer
@@ -248,6 +284,48 @@ end
 
 -- Create UI elements
 local ui = createTargetingUI()
+
+-- Function to check if a player is using a mage weapon in Aladia
+local function isUsingMageWeapon(targetPlayer)
+    if not config.TargetMages then return false end
+    
+    local character = targetPlayer.Character
+    if not character then return false end
+    
+    -- Check if player has tools that match mage identifiers
+    for _, tool in pairs(character:GetChildren()) do
+        if tool:IsA("Tool") then
+            for _, identifier in pairs(config.AladiaMageIdentifiers) do
+                if string.find(string.lower(tool.Name), string.lower(identifier)) then
+                    return true
+                end
+            end
+        end
+    end
+    
+    return false
+end
+
+-- Function to check if a player is using a melee weapon in Aladia
+local function isUsingMeleeWeapon(targetPlayer)
+    if not config.TargetMeleeUsers then return false end
+    
+    local character = targetPlayer.Character
+    if not character then return false end
+    
+    -- Check if player has tools that match melee identifiers
+    for _, tool in pairs(character:GetChildren()) do
+        if tool:IsA("Tool") then
+            for _, identifier in pairs(config.AladiaMeleeIdentifiers) do
+                if string.find(string.lower(tool.Name), string.lower(identifier)) then
+                    return true
+                end
+            end
+        end
+    end
+    
+    return false
+end
 
 -- Create ESP for a player
 local function createPlayerESP(targetPlayer)
@@ -323,6 +401,20 @@ local function createPlayerESP(targetPlayer)
     healthBarFill.BorderSizePixel = 0
     healthBarFill.Parent = healthBarBG
     
+    -- Create a weapon indicator label
+    local weaponLabel = Instance.new("TextLabel")
+    weaponLabel.Name = "WeaponLabel"
+    weaponLabel.Size = UDim2.new(1, 0, 0.2, 0)
+    weaponLabel.Position = UDim2.new(0, 0, 1.2, 0)
+    weaponLabel.BackgroundTransparency = 1
+    weaponLabel.Text = ""
+    weaponLabel.TextColor3 = Color3.fromRGB(255, 200, 0) -- Gold color for weapon text
+    weaponLabel.TextStrokeTransparency = 0
+    weaponLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    weaponLabel.TextSize = 12
+    weaponLabel.Font = Enum.Font.SourceSansBold
+    weaponLabel.Parent = espGui
+    
     -- Set initial visibility based on ESP toggle
     espGui.Visible = isESPEnabled
     
@@ -332,7 +424,8 @@ local function createPlayerESP(targetPlayer)
         Name = nameLabel,
         Distance = distanceLabel,
         HealthBG = healthBarBG,
-        HealthFill = healthBarFill
+        HealthFill = healthBarFill,
+        Weapon = weaponLabel
     }
     
     return espObjects[targetPlayer.UserId]
@@ -367,94 +460,4 @@ local function updateESP()
                 -- Check if within ESP distance
                 if distance <= config.ESPDistance then
                     -- Update adornee
-                    espData.Container.Adornee = character.HumanoidRootPart
-                    
-                    -- Update distance text
-                    espData.Distance.Text = math.floor(distance) .. "m"
-                    
-                    -- Update health
-                    local health = character.Humanoid.Health
-                    local maxHealth = character.Humanoid.MaxHealth
-                    local healthRatio = health / maxHealth
-                    
-                    espData.HealthFill.Size = UDim2.new(healthRatio, 0, 1, 0)
-                    
-                    -- Color health based on percentage
-                    if healthRatio > 0.5 then
-                        -- Green to yellow
-                        local lerpValue = (healthRatio - 0.5) * 2
-                        espData.HealthFill.BackgroundColor3 = Color3.new(2 - 2 * lerpValue, 1, 0)
-                    else
-                        -- Yellow to red
-                        local lerpValue = healthRatio * 2
-                        espData.HealthFill.BackgroundColor3 = Color3.new(1, lerpValue, 0)
-                    end
-                    
-                    -- Set box color based on team
-                    if config.TeamCheck and targetPlayer.Team == player.Team then
-                        espData.Box.Color = Color3.fromRGB(0, 255, 0) -- Green for teammates
-                    else
-                        espData.Box.Color = config.ESPBoxColor -- Default color for enemies
-                    end
-                    
-                    -- Show ESP elements based on configuration
-                    espData.Name.Visible = config.ESPShowName
-                    espData.Distance.Visible = config.ESPShowDistance
-                    espData.HealthBG.Visible = config.ESPShowHealth
-                    
-                    -- Show if ESP is enabled
-                    espData.Container.Visible = isESPEnabled
-                else
-                    -- Hide if too far
-                    espData.Container.Visible = false
-                end
-            else
-                -- Character not found, hide ESP
-                if espObjects[targetPlayer.UserId] and espObjects[targetPlayer.UserId].Container then
-                    espObjects[targetPlayer.UserId].Container.Visible = false
-                end
-            end
-        end
-    end
-end
-
--- Toggle system on key press (for PC)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    -- Toggle targeting with keyboard (for PC)
-    if input.KeyCode == config.ToggleKey then
-        isTargetingEnabled = not isTargetingEnabled
-        ui.CircleFrame.Visible = isTargetingEnabled
-        
-        -- Update button visuals if on mobile
-        if ui.ToggleButton then
-            ui.ToggleButton.BackgroundColor3 = isTargetingEnabled and config.MobileButtonActiveColor or config.MobileButtonColor
-            ui.ToggleButton:FindFirstChild("StatusLabel").Text = isTargetingEnabled and "ON" or "OFF"
-        end
-        
-        -- Provide feedback
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "Targeting System",
-            Text = isTargetingEnabled and "Targeting ON" or "Targeting OFF",
-            Duration = 1
-        })
-    end
-    
-    -- Toggle ESP with keyboard (for PC)
-    if input.KeyCode == config.ESPToggleKey then
-        isESPEnabled = not isESPEnabled
-        
-        -- Update button visuals if on mobile
-        if ui.ESPButton then
-            ui.ESPButton.BackgroundColor3 = isESPEnabled and config.MobileButtonActiveColor or config.MobileButtonColor
-        end
-        
-        -- Toggle ESP visibility
-        for _, espData in pairs(espObjects) do
-            if espData.Container then
-                espData.Container.Visible = isESPEnabled
-            end
-        end
-        
-      
+                    espData.Container.Adornee = character.HumanoidRootPa
