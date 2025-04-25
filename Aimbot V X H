@@ -46,76 +46,9 @@ Rayfield:Notify({
    Image = nil,
 })    
 
-local Button = MainTab:CreateButton({
-   Name = "Aimbot",
+local Button = Tab:CreateButton({
+   Name = "aimbot",
    Callback = function()
-   -- Silent Aim with FOV Circle
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-
-local FOV = 100 -- Field of View radius in pixels
-
-local function getClosestTarget()
-    local closestPlayer = nil
-    local shortestDistance = FOV
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local head = player.Character:FindFirstChild("Head")
-            if head then
-                local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen then
-                    local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(Mouse.X, Mouse.Y)).magnitude
-                    if distance < shortestDistance then
-                        shortestDistance = distance
-                        closestPlayer = player
-                    end
-                end
-            end
-        end
-    end
-    return closestPlayer
-end
-
--- Draw FOV Circle
-local Drawing = Drawing or require(game:GetService("ReplicatedStorage"):WaitForChild("Drawing")) -- fallback if Drawing library is available
-local circle = Drawing.new and Drawing.new("Circle") or nil
-
-if circle then
-    circle.Visible = true
-    circle.Radius = FOV
-    circle.Color = Color3.fromRGB(34, 197, 94)
-    circle.Thickness = 2
-    circle.NumSides = 64
-    circle.Filled = false
-
-    RunService.RenderStepped:Connect(function()
-        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-        circle.Position = mousePos
-    end)
-end
-
-local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
-local oldIndex = mt.__index
-setreadonly(mt, false)
-
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    if method == "FireServer" and tostring(self) == "HitPart" then
-        local args = {...}
-        local target = getClosestTarget()
-        if target and target.Character and target.Character:FindFirstChild("Head") then
-            args[1] = target.Character.Head
-            return oldNamecall(self, unpack(args))
-        end
-    end
-    return oldNamecall(self, ...)
-end)
-
-setreadonly(mt, true)
-print("Silent Aim with FOV Circle loaded successfully!")
+   -- The function that takes place when the button is pressed
    end,
-})    
+})
