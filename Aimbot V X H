@@ -1,22 +1,75 @@
+if game.Placeid == 17404472220
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "V X H aimbot",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "Rayfield Interface Suite",
+   LoadingSubtitle = "by Sirius",
+   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from warning when the script has a version mismatch with the interface
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, -- Create a custom folder for your hub/game
+      FileName = "V X H hub"
+   },
+
+   Discord = {
+      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "noinvitelink", -- The Discord invite code, do not include discord.gg/. E.g. discord.gg/ ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the discord every time they load it up
+   },
+
+   KeySystem = false, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
+      FileName = "Key", -- It is recommended to use something unique as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"Hello"} -- List of keys that will be accepted by the system, can be RAW file links (pastebin, github etc) or simple strings ("hello","key22")
+   }
+})
+
+local MainTab = Window:CreateTab("🏡 home", nil) -- Title, Image
+local MainSection = MainTab:CreateSection("")     
+
+Rayfield:Notify({
+   Title = "Welcome to aimbot hub!!!",
+   Content = "good aimbot!",
+   Duration = 5,
+   Image = nil,
+})    
+
+local Button = MainTab:CreateButton({
+   Name = "Aimbot",
+   Callback = function()
+   -- Silent Aim with FOV Circle
 local Players = game:GetService("Players")
-local localPlayer = Players.LocalPlayer
-local mouse = localPlayer:GetMouse()
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
 
-local enabled = false
+local FOV = 100 -- Field of View radius in pixels
 
-function getClosestEnemy()
-    local closestDistance = math.huge
+local function getClosestTarget()
     local closestPlayer = nil
+    local shortestDistance = FOV
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
             local head = player.Character:FindFirstChild("Head")
             if head then
-                local screenPoint, onScreen = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
+                local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
-                    local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(mouse.X, mouse.Y)).magnitude
-                    if distance < closestDistance then
-                        closestDistance = distance
+                    local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(Mouse.X, Mouse.Y)).magnitude
+                    if distance < shortestDistance then
+                        shortestDistance = distance
                         closestPlayer = player
                     end
                 end
@@ -26,82 +79,43 @@ function getClosestEnemy()
     return closestPlayer
 end
 
-UserInputService.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        enabled = true
-    end
-end)
+-- Draw FOV Circle
+local Drawing = Drawing or require(game:GetService("ReplicatedStorage"):WaitForChild("Drawing")) -- fallback if Drawing library is available
+local circle = Drawing.new and Drawing.new("Circle") or nil
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        enabled = false
-    end
-end)
+if circle then
+    circle.Visible = true
+    circle.Radius = FOV
+    circle.Color = Color3.fromRGB(34, 197, 94)
+    circle.Thickness = 2
+    circle.NumSides = 64
+    circle.Filled = false
 
-RunService.RenderStepped:Connect(function()
-    if enabled then
-        local target = getClosestEnemy()
-        if target and target.Character and target.Character:FindFirstChild("Head") then
-            local headPos = target.Character.Head.Position
-            local ray = Ray.new(workspace.CurrentCamera.CFrame.Position, (headPos - workspace.CurrentCamera.CFrame.Position).unit * 500)
-            local part, position = workspace:FindPartOnRay(ray, localPlayer.Character, false, true)
-            if part then
-                localPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(position)
-            end
-        end
-    end
-end)
-
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local localPlayer = Players.LocalPlayer
-
-local espFolder = Instance.new("Folder", workspace)
-espFolder.Name = "ESPBoxes"
-
-function createBox(player)
-    local box = Instance.new("BoxHandleAdornment")
-    box.Adornee = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    box.AlwaysOnTop = true
-    box.ZIndex = 10
-    box.Size = Vector3.new(4, 6, 4)
-    box.Color3 = Color3.new(1, 0, 0)
-    box.Transparency = 0.5
-    box.Parent = espFolder
-    return box
+    RunService.RenderStepped:Connect(function()
+        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+        circle.Position = mousePos
+    end)
 end
 
-local boxes = {}
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+local oldIndex = mt.__index
+setreadonly(mt, false)
 
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(character)
-        wait(1)
-        if boxes[player] then
-            boxes[player]:Destroy()
-            boxes[player] = nil
-        end
-        if player ~= localPlayer then
-            boxes[player] = createBox(player)
-        end
-    end)
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-    if boxes[player] then
-        boxes[player]:Destroy()
-        boxes[player] = nil
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    for player, box in pairs(boxes) do
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            box.Adornee = player.Character.HumanoidRootPart
-            box.Size = Vector3.new(4, 6, 4)
-            box.Transparency = 0.5
-        else
-            box.Adornee = nil
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if method == "FireServer" and tostring(self) == "HitPart" then
+        local args = {...}
+        local target = getClosestTarget()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            args[1] = target.Character.Head
+            return oldNamecall(self, unpack(args))
         end
     end
+    return oldNamecall(self, ...)
 end)
+
+setreadonly(mt, true)
+print("Silent Aim with FOV Circle loaded successfully!")
+   end,
+})    
